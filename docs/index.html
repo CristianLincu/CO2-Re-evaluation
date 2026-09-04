@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reducing CO₂ Levels Using Genetic Algorithms — A Re-evaluation</title>
+<meta name="description" content="Carbon-aware dispatch optimisation for Denmark's power grid using a monotone emissions model and a genetic algorithm over four-hour trajectories." />
+<link rel="stylesheet" href="css/styles.css" />
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<script>
+  window.MathJax = { tex: { inlineMath: [["$", "$"]], displayMath: [["$$", "$$"]] }, svg: { fontCache: "global" } };
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+<div class="container">
+
+  <h1>Reducing CO<sub>2</sub> Levels Using Genetic Algorithms<span class="subtitle">A Re-evaluation</span></h1>
+
+  <div id="status" class="status-bar loading">Loading data…</div>
+
+  <p>
+    This project provides a solution framework for minimizing CO<sub>2</sub> emission levels in a national
+    power grid through machine learning methods. Data is collected via
+    <a href="https://www.energidataservice.dk/tso-electricity/PowerSystemRightNow">Energinet's public API</a>,
+    which provides real-time data about Denmark's power system. The framework keeps the structure of the
+    original formulation — a regression model inferring CO<sub>2</sub> levels, gradient-boosted regressors
+    forecasting demand and renewable production, and a genetic ensemble searching for the emission-minimizing
+    distribution — while correcting the modelling errors that made the original results unreliable.
+  </p>
+
+  <h2>Current state</h2>
+
+  <div class="metrics" id="metrics"></div>
+
+  <p class="caption">
+    The headline reduction is measured against the <strong>hold-current counterfactual</strong>: what emissions
+    would be over the same four hours if demand and renewables follow their forecasts but the controllable
+    resources stay exactly where they are. Comparing against the present measured value instead — as the
+    original version did — credits the optimiser with whatever the weather was going to do anyway.
+  </p>
+
+  <div class="chart-wrap" id="co2-chart"></div>
+  <p class="caption">
+    Fig 1: Measured CO<sub>2</sub> intensity over the past twelve hours, the hold-current counterfactual over
+    the coming four hours, and the optimised trajectory. The shaded band is the emissions model's own
+    dispersion, not a confidence interval on the grid.
+  </p>
+
+  <h2>Optimal resource allocation over the next four hours</h2>
+
+  <div class="table-wrap">
+    <table id="allocation">
+      <thead><tr id="allocation-head"></tr></thead>
+      <tbody id="allocation-body"></tbody>
+    </table>
+  </div>
+  <div class="mobile-cards" id="allocation-cards"></div>
+  <p class="caption">
+    Fig 2: Scheduled power plant production and interconnector exchanges for each 15-minute step, with the
+    forecast demand and renewables that condition them. Positive exchange values are imports, negative ones
+    exports. Every row satisfies the national energy balance and every change between rows respects the
+    resource's ramp limit.
+  </p>
+
+  <div class="chart-wrap" id="dispatch-chart"></div>
+  <p class="caption">
+    Fig 3: The same schedule as a trajectory. Because a chromosome is the whole four-hour path rather than a
+    single time point, consecutive steps are coupled by ramp constraints instead of a similarity term.
+  </p>
+
+  <h2>Methodology</h2>
+
+  <div class="methodology">
+    <p>
+      <strong>I. Inferring CO<sub>2</sub> levels.</strong> A regression model infers CO<sub>2</sub> levels from
+      12 features: renewable energy production (solar and wind), energy produced by power plants with installed
+      capacity greater or equal to 100 MW, energy produced by power plants with installed capacity less than
+      100 MW, and the nine energy exchanges between Denmark and other countries or areas (DK1-DE, DK1-NL,
+      DK1-GB, DK1-NO, DK1-SE, DK1-DK2, DK2-DE, DK2-SE, Bornholm-SE). Two properties make it safe to optimise
+      against. It predicts <em>total</em> emissions rather than intensity, and it is constrained to be
+      monotonically non-decreasing in every supply source — which is physically true under consumption-based
+      accounting, and which removes the confounded relationship an unconstrained model learns from
+      wind-correlated data. It also reports its own reliability: the training support behind each prediction
+      and the distance of each candidate from anything ever observed.
+    </p>
+    <p>
+      <strong>II. Forecasting.</strong> XGBoost regressors provide multi-step forecasting for demand and
+      renewable production over the next 16 steps, four hours ahead at the 15-minute resolution Denmark uses
+      for imbalance settlement. Renewable production is not extrapolated from its own recent output — wind
+      four hours out is not recoverable that way — but built on Energinet's own physical forecast, with a
+      learned correction on top. Every model is evaluated chronologically against a persistence baseline.
+    </p>
+    <p>
+      <strong>III. Genetic optimisation.</strong> The optimal combination of sources is inferred using genetic
+      algorithms. To escape local optima, this uses a genetic ensemble of 16 optimisers evaluated as an island
+      model with periodic migration. A chromosome is an entire dispatch trajectory
+      $X^{(j)} \in \mathbb{R}^{T \times d}$ with $d = 11$ genes per step and $T = 16$ steps, so the first
+      generation is
+    </p>
+    <p style="text-align:center">
+      $$G = \begin{bmatrix} - & \operatorname{vec}(X^{(1)}) & - \\ - & \operatorname{vec}(X^{(2)}) & - \\ & \vdots & \\ - & \operatorname{vec}(X^{(m)}) & - \end{bmatrix} \in \mathbb{R}^{m \times Td}$$
+    </p>
+    <p>
+      where $m$ is the size of the population. Each trajectory minimises
+    </p>
+    <p style="text-align:center">
+      $$X^{*} = \underset{X^{(j)}}{\operatorname{argmin}} \; \frac{1}{T}\sum_{t=1}^{T} \Big[ \xi_b\,\mathcal{P}_b(x_t) + \xi_r\,\mathcal{P}_r(x_t, x_{t-1}) + \xi_s\,\mathcal{P}_s(x_t) + \zeta\,\Theta(x_t) + \gamma\,\sigma(x_t) \Big]$$
+    </p>
+    <p>
+      where $\mathcal{P}_b$ is the grid imbalance penalty, built on the indicator function
+      $\mathbf{I}\left(\left|D_{XG} - R_{XG} - \sum_{i \in \mathcal{B}} x_i\right| > 0.01\,D_{XG}\right)$ and
+      scaled by the relative size of the violation so the heuristic has a gradient to descend;
+      $\mathcal{P}_r$ is the ramp penalty between consecutive steps, which replaces the scale-invariant cosine
+      similarity of the original formulation; $\mathcal{P}_s$ confines the search to the region where the
+      emissions model has evidence; $\Theta$ is the emissions level inferred by the regression ensemble,
+      augmented by $\zeta$; and $\sigma$ is the model's own dispersion, augmented by $\gamma$, so the
+      optimiser prefers solutions it is confident about. The sum runs only over the eight cross-border links
+      $\mathcal{B}$: the DK1-DK2 link joins two Danish bidding zones, so it cannot change national supply.
+    </p>
+    <p>
+      Every candidate passes through a repair operator that enforces bounds, ramp limits and the energy
+      balance by construction, so the search spends its effort on emissions rather than on rediscovering
+      feasibility.
+    </p>
+  </div>
+
+  <a class="paper-link" href="paper/CO2_Reevaluation.pdf">Download the research paper (PDF)</a>
+
+  <h2>Validation</h2>
+
+  <p class="caption" style="max-width:46rem">
+    Published because a dashboard that reports a reduction without reporting its own error bars is not
+    telling you enough to judge it.
+  </p>
+
+  <div class="validation" id="validation"></div>
+
+  <div class="chart-wrap scatter" id="scatter-chart"></div>
+  <p class="caption">
+    Fig 4: Relationship between large-plant production, renewable energy, net cross-border exchange and
+    CO<sub>2</sub> intensity over the past 24 hours. The strong apparent link between thermal output and low
+    emissions visible in data like this is confounded by wind, and is exactly what the constrained model is
+    built to ignore.
+  </p>
+
+  <div class="footer">
+    <p>Author: Cristian Lincu · <a href="https://github.com/CristianLincu/CO2-Re-evaluation">Source on GitHub</a></p>
+    <p id="footer-meta"></p>
+  </div>
+
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>

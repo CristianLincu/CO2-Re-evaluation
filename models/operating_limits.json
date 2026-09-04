@@ -1,0 +1,42 @@
+{
+  "lower": {
+    "ProductionGe100MW": 0.86,
+    "ProductionLt100MW": 206.56346554853334,
+    "Exchange_DK1_DE": -3395.6529892191998,
+    "Exchange_DK1_NL": -700.539978,
+    "Exchange_DK1_GB": -1456.0,
+    "Exchange_DK1_NO": -1632.3333333333333,
+    "Exchange_DK1_SE": -715.0,
+    "Exchange_DK1_DK2": -590.3944112148666,
+    "Exchange_DK2_DE": -936.0558799821333,
+    "Exchange_DK2_SE": -1193.7671540032,
+    "Exchange_Bornholm_SE": -28.427668520133327
+  },
+  "upper": {
+    "ProductionGe100MW": 1977.5916405423322,
+    "ProductionLt100MW": 945.7289831593914,
+    "Exchange_DK1_DE": 3478.365729764327,
+    "Exchange_DK1_NL": 700.549988,
+    "Exchange_DK1_GB": 1456.0,
+    "Exchange_DK1_NO": 1632.0150646788,
+    "Exchange_DK1_SE": 715.8,
+    "Exchange_DK1_DK2": 600.1809522212667,
+    "Exchange_DK2_DE": 1000.0737743292191,
+    "Exchange_DK2_SE": 1322.1993409768,
+    "Exchange_Bornholm_SE": 42.638811893399975
+  },
+  "ramp": {
+    "ProductionGe100MW": 109.78945401866642,
+    "ProductionLt100MW": 102.07395027733328,
+    "Exchange_DK1_DE": 889.7971320293327,
+    "Exchange_DK1_NL": 545.5875963519997,
+    "Exchange_DK1_GB": 756.1118222906663,
+    "Exchange_DK1_NO": 289.86666666666656,
+    "Exchange_DK1_SE": 285.26933333333295,
+    "Exchange_DK1_DK2": 272.50269246399927,
+    "Exchange_DK2_DE": 269.67359979066646,
+    "Exchange_DK2_SE": 372.9677293359995,
+    "Exchange_Bornholm_SE": 21.716800001333315
+  },
+  "note": "Bounds are the observed 0.1/99.9 percentiles capped by technical transfer capacity. Ramp limits are the 99th percentile of realised 15-minute changes over the training year."
+}

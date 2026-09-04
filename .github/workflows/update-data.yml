@@ -1,0 +1,53 @@
+name: Update dashboard data
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub cron is best-effort and may drift under load.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    # A solve takes about 60 s end to end; the ceiling is here to stop a
+    # hung API call from occupying a runner, not because the work is close
+    # to it.
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        run: python pipeline/run.py
+        env:
+          # Keep the scheduled run inside its window even if a solve is slow.
+          GA_EPOCHS: "200"
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/latest.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: refresh dashboard data"
+            git push
+          fi

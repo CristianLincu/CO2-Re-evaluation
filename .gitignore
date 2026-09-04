@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Cached Energinet downloads; rebuilt by scripts/build_dataset.py
+data_cache/
+
+# Local experiments and machine-specific TLS workarounds
+scratch/
+
+# LaTeX build products
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.synctex.gz

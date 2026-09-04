@@ -1,0 +1,268 @@
+{
+  "demand": {
+    "params": {
+      "subsample": 0.85,
+      "reg_lambda": 1.0,
+      "n_estimators": 400,
+      "min_child_weight": 20,
+      "max_depth": 3,
+      "learning_rate": 0.03,
+      "colsample_bytree": 0.85
+    },
+    "metrics": [
+      {
+        "step": 1,
+        "minutes_ahead": 15,
+        "model_rmse": 88.94776532911679,
+        "model_mae": 61.046970776412934,
+        "persistence_rmse": 98.30178061240076
+      },
+      {
+        "step": 2,
+        "minutes_ahead": 30,
+        "model_rmse": 130.01487504351198,
+        "model_mae": 90.61804674442958,
+        "persistence_rmse": 159.85348085297542
+      },
+      {
+        "step": 3,
+        "minutes_ahead": 45,
+        "model_rmse": 162.90353038869347,
+        "model_mae": 113.34545794091972,
+        "persistence_rmse": 216.74066874313266
+      },
+      {
+        "step": 4,
+        "minutes_ahead": 60,
+        "model_rmse": 193.56123225091358,
+        "model_mae": 135.17271174710933,
+        "persistence_rmse": 272.4312223357172
+      },
+      {
+        "step": 5,
+        "minutes_ahead": 75,
+        "model_rmse": 223.1970058762151,
+        "model_mae": 157.28561987233203,
+        "persistence_rmse": 327.1788567685243
+      },
+      {
+        "step": 6,
+        "minutes_ahead": 90,
+        "model_rmse": 248.08791410963198,
+        "model_mae": 176.38293090680463,
+        "persistence_rmse": 379.2014712680612
+      },
+      {
+        "step": 7,
+        "minutes_ahead": 105,
+        "model_rmse": 269.2186713658144,
+        "model_mae": 191.4541028832082,
+        "persistence_rmse": 429.6743226646536
+      },
+      {
+        "step": 8,
+        "minutes_ahead": 120,
+        "model_rmse": 288.2147381944029,
+        "model_mae": 206.13067870436123,
+        "persistence_rmse": 478.5254279761726
+      },
+      {
+        "step": 9,
+        "minutes_ahead": 135,
+        "model_rmse": 303.72237594449393,
+        "model_mae": 218.1922524292249,
+        "persistence_rmse": 525.6958626127268
+      },
+      {
+        "step": 10,
+        "minutes_ahead": 150,
+        "model_rmse": 320.7887176953095,
+        "model_mae": 230.7446070838836,
+        "persistence_rmse": 571.2033817324816
+      },
+      {
+        "step": 11,
+        "minutes_ahead": 165,
+        "model_rmse": 333.229221060636,
+        "model_mae": 240.30150224454675,
+        "persistence_rmse": 615.354179410068
+      },
+      {
+        "step": 12,
+        "minutes_ahead": 180,
+        "model_rmse": 345.9595456843419,
+        "model_mae": 250.69728341841554,
+        "persistence_rmse": 658.0808460826056
+      },
+      {
+        "step": 13,
+        "minutes_ahead": 195,
+        "model_rmse": 354.5361422315839,
+        "model_mae": 257.6360825843434,
+        "persistence_rmse": 699.4779215655236
+      },
+      {
+        "step": 14,
+        "minutes_ahead": 210,
+        "model_rmse": 362.4238657648914,
+        "model_mae": 263.6766036129401,
+        "persistence_rmse": 739.5682577200963
+      },
+      {
+        "step": 15,
+        "minutes_ahead": 225,
+        "model_rmse": 368.70488857914376,
+        "model_mae": 269.7444079503872,
+        "persistence_rmse": 778.2117600470117
+      },
+      {
+        "step": 16,
+        "minutes_ahead": 240,
+        "model_rmse": 374.46659374966083,
+        "model_mae": 275.7657182526869,
+        "persistence_rmse": 815.797879880191
+      }
+    ]
+  },
+  "renewables": {
+    "params": {
+      "subsample": 0.7,
+      "reg_lambda": 20.0,
+      "n_estimators": 600,
+      "min_child_weight": 1,
+      "max_depth": 3,
+      "learning_rate": 0.05,
+      "colsample_bytree": 0.85
+    },
+    "metrics": [
+      {
+        "step": 1,
+        "minutes_ahead": 15,
+        "model_rmse": 135.93207832207037,
+        "model_mae": 87.43412692342203,
+        "persistence_rmse": 151.74023246538732,
+        "energinet_rmse": 699.4053488909582
+      },
+      {
+        "step": 2,
+        "minutes_ahead": 30,
+        "model_rmse": 201.7751735462112,
+        "model_mae": 138.30280546964198,
+        "persistence_rmse": 262.1156332771022,
+        "energinet_rmse": 699.4130277313769
+      },
+      {
+        "step": 3,
+        "minutes_ahead": 45,
+        "model_rmse": 254.19048551088466,
+        "model_mae": 182.0932850312381,
+        "persistence_rmse": 362.0167178199488,
+        "energinet_rmse": 699.4288712165662
+      },
+      {
+        "step": 4,
+        "minutes_ahead": 60,
+        "model_rmse": 299.6692508323728,
+        "model_mae": 218.81108104279073,
+        "persistence_rmse": 459.3062187524787,
+        "energinet_rmse": 699.4511212783184
+      },
+      {
+        "step": 5,
+        "minutes_ahead": 75,
+        "model_rmse": 337.4215781215144,
+        "model_mae": 248.27104265740394,
+        "persistence_rmse": 554.8589264620043,
+        "energinet_rmse": 699.4761385491241
+      },
+      {
+        "step": 6,
+        "minutes_ahead": 90,
+        "model_rmse": 368.0440884613557,
+        "model_mae": 272.74683698398013,
+        "persistence_rmse": 646.8757696890162,
+        "energinet_rmse": 699.4896940166046
+      },
+      {
+        "step": 7,
+        "minutes_ahead": 105,
+        "model_rmse": 391.27113467297846,
+        "model_mae": 291.9280909837685,
+        "persistence_rmse": 735.4415172519016,
+        "energinet_rmse": 699.4975876531055
+      },
+      {
+        "step": 8,
+        "minutes_ahead": 120,
+        "model_rmse": 407.85807251266704,
+        "model_mae": 304.3168565819254,
+        "persistence_rmse": 820.7618754119541,
+        "energinet_rmse": 699.5044722268558
+      },
+      {
+        "step": 9,
+        "minutes_ahead": 135,
+        "model_rmse": 423.1128608173827,
+        "model_mae": 315.42180874417306,
+        "persistence_rmse": 902.8233385784147,
+        "energinet_rmse": 699.5109383651042
+      },
+      {
+        "step": 10,
+        "minutes_ahead": 150,
+        "model_rmse": 435.18325588938507,
+        "model_mae": 324.234092166301,
+        "persistence_rmse": 981.8225316307241,
+        "energinet_rmse": 699.5109476033203
+      },
+      {
+        "step": 11,
+        "minutes_ahead": 165,
+        "model_rmse": 445.50477446329324,
+        "model_mae": 332.8413236599903,
+        "persistence_rmse": 1057.7107563730258,
+        "energinet_rmse": 699.5131348889229
+      },
+      {
+        "step": 12,
+        "minutes_ahead": 180,
+        "model_rmse": 451.45697317436975,
+        "model_mae": 337.13542144799936,
+        "persistence_rmse": 1130.6260377835847,
+        "energinet_rmse": 699.5239508204681
+      },
+      {
+        "step": 13,
+        "minutes_ahead": 195,
+        "model_rmse": 460.2482596860142,
+        "model_mae": 344.1270292448097,
+        "persistence_rmse": 1200.6406233124637,
+        "energinet_rmse": 699.539201554037
+      },
+      {
+        "step": 14,
+        "minutes_ahead": 210,
+        "model_rmse": 462.9452232390273,
+        "model_mae": 346.19135014408596,
+        "persistence_rmse": 1267.7910797085,
+        "energinet_rmse": 699.5577824211712
+      },
+      {
+        "step": 15,
+        "minutes_ahead": 225,
+        "model_rmse": 466.94232373940235,
+        "model_mae": 348.92348802110996,
+        "persistence_rmse": 1332.1254878652542,
+        "energinet_rmse": 699.5813322299527
+      },
+      {
+        "step": 16,
+        "minutes_ahead": 240,
+        "model_rmse": 468.59414016198383,
+        "model_mae": 350.51306593437124,
+        "persistence_rmse": 1393.968925536955,
+        "energinet_rmse": 699.6091262707051
+      }
+    ]
+  }
+}
