@@ -44,10 +44,32 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data/latest.json
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
-          else
+
+          # A solve takes about a minute, so the remote can move while this job
+          # is running. Rebuild the commit on top of whatever main is now and
+          # retry, rather than failing the run over a race.
+          cp docs/data/latest.json "$RUNNER_TEMP/latest.json"
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp "$RUNNER_TEMP/latest.json" docs/data/latest.json
+            git add docs/data/latest.json
+
+            if git diff --staged --quiet; then
+              echo "No changes to commit."
+              exit 0
+            fi
+
             git commit -m "chore: refresh dashboard data"
-            git push
-          fi
+            if git push origin main; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+
+            echo "Push rejected; the remote moved. Retrying."
+            sleep $((attempt * 5))
+          done
+
+          echo "Could not push after 3 attempts."
+          exit 1
