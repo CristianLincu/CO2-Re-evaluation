@@ -116,6 +116,15 @@ Interconnector limits are fixed over the horizon rather than read from published
 per-market-time-unit capacities. Prices and contract terms are absent, so a
 schedule may be physically feasible and economically impossible.
 
+The emissions model is compressive, as a regularised estimator fitted to a
+long-tailed target will be. Replaying the most recent 30 hours of observed states
+gives 9.9 g/kWh mean absolute error at a −8.2 g/kWh bias: slightly high at very
+low intensities, low at high ones. Read the absolute levels as estimates with
+roughly a 10 g/kWh error bar. The *reduction* is more robust, since the
+counterfactual and the optimised trajectory share the model and a common bias
+largely divides out — but that ratio is itself compressed toward one, so treat the
+percentage as direction and rough magnitude rather than a precise figure.
+
 Most importantly, Energinet's CO₂ figure is a **consumption-based** intensity: it
 assigns emission factors to imports. A schedule can lower the Danish number by
 importing more low-carbon Nordic power without lowering emissions anywhere, since

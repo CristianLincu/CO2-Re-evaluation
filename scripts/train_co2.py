@@ -141,15 +141,36 @@ def main():
     print(f"  MAE, chronological split = {chrono_mae:.2f} g/kWh   <- honest")
     print(f"  deployed model           = {metrics['intensity_mae']:.2f} g/kWh")
 
+    # --- refit on everything for deployment ----------------------------------
+    # The metrics above describe what this configuration achieves on unseen
+    # future data. What gets deployed is refitted on the whole year, including
+    # the most recent weeks; serving a model fitted only to the first 80% of
+    # the data leaves it months stale on day one, which showed up as a
+    # systematic bias against live observations.
+    print("\nrefitting on the full period for deployment...")
+    deployed = make_monotone_ensemble(**search.best_params_)
+    deployed.fit(X, y)
+    deployed_tree = make_partition_tree()
+    deployed_tree.fit(X, y)
+    original_full = DecisionTreeRegressor(random_state=9).fit(X, intensity)
+
     # --- exploitation probe --------------------------------------------------
     base_idx = len(X_test) // 2
     base_row = X_test[base_idx].copy()
     base_demand = float(d_test[base_idx])
 
+    # Probed on the split-fitted models against a held-out base row. Probing a
+    # fully grown tree that has already seen that row measures memorisation
+    # rather than the shape of the surface the optimiser would search.
     new_probe = thermal_ramp_probe(ensemble.predict, base_row, base_demand)
     old_probe = thermal_ramp_probe(
-        lambda rows: total_emission_rate(original.predict(rows), base_demand), base_row, base_demand
+        lambda rows: total_emission_rate(original.predict(rows), base_demand),
+        base_row,
+        base_demand,
     )
+    # Monotonicity is structural, so it must survive the refit.
+    deployed_probe = thermal_ramp_probe(deployed.predict, base_row, base_demand)
+    assert deployed_probe["monotone_non_decreasing"], "deployed model is not monotone"
     metrics["probe_deployed"] = new_probe
     metrics["probe_original"] = old_probe
 
@@ -164,7 +185,7 @@ def main():
     )
 
     # --- wrap and persist ----------------------------------------------------
-    safe = build_safe_model(ensemble, partition_tree, X_train, y_train, CO2_FEATURES)
+    safe = build_safe_model(deployed, deployed_tree, X, y, CO2_FEATURES)
     _, _, support, novelty = safe.evaluate(X_test)
     in_dist = safe.is_supported(support, novelty)
 

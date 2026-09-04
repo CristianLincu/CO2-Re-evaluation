@@ -429,6 +429,18 @@ would consume them rather than assume them.
 The model takes no account of exchange contract terms or energy prices, so a
 proposed schedule may be physically feasible and economically impossible.
 
+The emissions model is compressive, as a regularized estimator fitted to a
+long-tailed target will be. Replaying the most recent 30 hours of observed
+states gives a mean absolute error of 9.9~g/kWh with a bias of $-8.2$~g/kWh:
+it over-predicts slightly at very low intensities and under-predicts at high
+ones. Absolute emission levels on the dashboard should therefore be read as
+estimates with roughly a 10~g/kWh error bar, not as measurements. The
+\emph{reduction} is more robust than the levels, because the counterfactual
+and the optimized trajectory are evaluated with the same model and a shared
+bias largely divides out; but the ratio is itself compressed towards one, so
+the reported percentage is better treated as an indication of direction and
+rough magnitude than as a precise figure.
+
 Most importantly, Energinet's CO$_2$ figure is a \emph{consumption-based}
 intensity for Denmark: it assigns emission factors to imports. A schedule can
 therefore lower the Danish number by importing more low-carbon power from

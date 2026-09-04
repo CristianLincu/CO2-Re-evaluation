@@ -214,8 +214,24 @@ def train_forecaster(
             row["energinet_rmse"] = root_mean_squared_error(y_test[:, step], raw)
         metrics.append(row)
 
+    # The metrics above describe what this configuration achieves on unseen
+    # future data. The models that get deployed are then refitted on every
+    # sample, including the most recent ones: a model trained only on the
+    # first 80% of the year is already months stale by the time it serves.
+    deployed = []
+    for step in range(horizon):
+        model = XGBRegressor(
+            objective="reg:squarederror",
+            tree_method="hist",
+            n_jobs=-1,
+            random_state=9,
+            **params,
+        )
+        model.fit(X[:, step, :], y[:, step])
+        deployed.append(model)
+
     forecaster = MultiStepForecaster(
-        models=models,
+        models=deployed,
         target=target,
         lag_columns=list(lag_columns),
         n_lags=n_lags,

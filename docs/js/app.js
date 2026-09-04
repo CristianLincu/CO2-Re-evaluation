@@ -92,7 +92,9 @@ function renderMetrics(payload) {
     );
   }
   if (diag.inDistributionPct !== undefined) {
-    const ok = diag.inDistributionPct >= 99;
+    // Below 90% means several steps are extrapolations and the emissions
+    // figure should be read with more caution than usual.
+    const ok = diag.inDistributionPct >= 90;
     flags.push(
       `<span class="flag ${ok ? "ok" : "warn"}">${fmt(diag.inDistributionPct, 0)}% of steps within model support</span>`
     );

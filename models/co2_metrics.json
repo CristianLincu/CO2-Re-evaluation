@@ -234,6 +234,6 @@
     "total_change_tph": 277.18507511317955,
     "min_at_mw": 300.0
   },
-  "novelty_threshold": 25.456297833108653,
-  "test_in_distribution_pct": 97.13872832369943
+  "novelty_threshold": 25.42015722511958,
+  "test_in_distribution_pct": 98.91618497109826
 }
