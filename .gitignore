@@ -3,6 +3,9 @@ __pycache__/
 .ipynb_checkpoints/
 .venv/
 venv/
+.env
+.DS_Store
+Thumbs.db
 
 # Cached Energinet downloads; rebuilt by scripts/build_dataset.py
 data_cache/
@@ -15,3 +18,15 @@ paper/*.aux
 paper/*.log
 paper/*.out
 paper/*.synctex.gz
+
+# Replay intermediates: large, regenerable from scripts/backtest.py
+backtest/frame.parquet
+backtest/periods.parquet
+backtest/steps.parquet
+backtest/fold_*/fold.joblib
+backtest/before_fix/
+backtest/run.log
+
+# IDE
+.cursor/
+.vscode/

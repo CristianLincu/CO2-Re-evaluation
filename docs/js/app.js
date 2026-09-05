@@ -92,11 +92,15 @@ function renderMetrics(payload) {
     );
   }
   if (diag.inDistributionPct !== undefined) {
-    // Below 90% means several steps are extrapolations and the emissions
-    // figure should be read with more caution than usual.
     const ok = diag.inDistributionPct >= 90;
     flags.push(
       `<span class="flag ${ok ? "ok" : "warn"}">${fmt(diag.inDistributionPct, 0)}% of steps within model support</span>`
+    );
+  }
+  if (diag.withinFloorPct !== undefined) {
+    const ok = diag.withinFloorPct >= 99;
+    flags.push(
+      `<span class="flag ${ok ? "ok" : "warn"}">${fmt(diag.withinFloorPct, 0)}% of steps above the historical floor</span>`
     );
   }
   if (diag.maxBalanceErrorMW !== undefined) {
@@ -322,8 +326,7 @@ function renderValidation(payload) {
         <h3>Emissions model</h3>
         <dl>
           <dt>Intensity MAE, chronological hold-out</dt><dd>${fmt(co2.intensity_mae)} g/kWh</dd>
-          <dt>Original tree, same hold-out</dt><dd>${fmt(co2.original_chronological_mae)} g/kWh</dd>
-          <dt>Original tree, shuffled split</dt><dd>${fmt(co2.original_shuffled_split_mae)} g/kWh <span class="warnnote">leakage-inflated</span></dd>
+          <dt>Total-emissions R²</dt><dd>${fmt(co2.total_r2, 3)}</dd>
           <dt>Monotone in every supply source</dt><dd>${co2.probe_deployed && co2.probe_deployed.monotone_non_decreasing ? "yes" : "no"}</dd>
           <dt>Training rows</dt><dd>${co2.n_train ? co2.n_train.toLocaleString() : "—"}</dd>
         </dl>
@@ -346,6 +349,73 @@ function renderValidation(payload) {
   }
 
   document.getElementById("validation").innerHTML = blocks.join("");
+}
+
+/* --- historical backtest -------------------------------------------------- */
+
+function renderBacktest(bt) {
+  if (!bt) return;
+
+  const cards = [
+    {
+      label: "Origins replayed",
+      value: bt.n_periods.toLocaleString(),
+      unit: `${bt.folds} expanding folds`,
+      note: `${bt.window[0]} → ${bt.window[1]}`,
+    },
+    {
+      label: "Ranking slope",
+      value: fmt(bt.ranking_slope, 2),
+      unit: `r = ${fmt(bt.ranking_r, 2)}`,
+      note: "predicted vs metered difference",
+    },
+    {
+      label: "Pipeline claim",
+      value: fmt(bt.pooled_reduction_vs_real_pct, 0),
+      unit: "%",
+      note: "vs the dispatch that actually ran",
+    },
+    {
+      label: "After corrections",
+      value: fmt(bt.capped_discounted_pct, 0),
+      unit: "%",
+      note: "historical floor + ranking discount",
+      highlight: true,
+    },
+  ];
+
+  document.getElementById("backtest-metrics").innerHTML = cards
+    .map(
+      (c) => `
+      <div class="metric${c.highlight ? " metric-accent" : ""}">
+        <div class="metric-label">${c.label}</div>
+        <div class="metric-value">${c.value}<span class="metric-unit">${c.unit}</span></div>
+        <div class="metric-note">${c.note}</div>
+      </div>`
+    )
+    .join("");
+
+  document.getElementById("backtest-detail").innerHTML = `
+    <div class="val-card">
+      <h3>What the model can do</h3>
+      <dl>
+        <dt>R² on realised dispatch</dt><dd>${fmt(bt.model_r2, 3)}</dd>
+        <dt>Mean absolute error</dt><dd>${fmt(bt.model_mae_tph, 0)} t/h</dd>
+        <dt>Matched pairs in the ranking test</dt><dd>${bt.ranking_n.toLocaleString()}</dd>
+        <dt>Sign agreement</dt><dd>${fmt(bt.ranking_sign_agreement, 0)}%</dd>
+        <dt>Slope along the optimiser's move</dt><dd>${fmt(bt.ranking_aligned_slope, 2)}</dd>
+      </dl>
+    </div>
+    <div class="val-card">
+      <h3>What the optimiser proposed</h3>
+      <dl>
+        <dt>Negative predicted emissions</dt><dd>${fmt(bt.negative_prediction_pct, 0)}%</dd>
+        <dt>Steps inside the historical floor</dt><dd>${fmt(bt.within_floor_pct, 1)}%</dd>
+        <dt>Share from less domestic generation</dt><dd>${fmt(bt.gen_share_pct, 0)}%</dd>
+        <dt>Share from cross-border reallocation</dt><dd>${fmt(bt.xb_share_pct, 0)}%</dd>
+        <dt>Steps still balanced under realised weather</dt><dd>${fmt(bt.steps_within_tolerance_pct, 0)}%</dd>
+      </dl>
+    </div>`;
 }
 
 /* --- boot ----------------------------------------------------------------- */
@@ -388,6 +458,13 @@ async function main() {
     renderDispatchChart(payload);
     renderValidation(payload);
     renderScatter(payload);
+
+    try {
+      const backtestResponse = await fetch(`data/backtest.json?t=${Date.now()}`);
+      if (backtestResponse.ok) renderBacktest(await backtestResponse.json());
+    } catch (_) {
+      /* the live schedule should still render if the static file is missing */
+    }
 
     const meta = payload.meta || {};
     document.getElementById("footer-meta").textContent = meta.reductionBasis

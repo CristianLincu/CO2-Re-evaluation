@@ -12,7 +12,7 @@
 \captionsetup{font=small,labelfont=bf}
 \setlength{\parskip}{0.4em}
 
-\title{\vspace{-1.5cm}\textbf{Reducing CO$_2$ Levels Using Genetic Algorithms:\\A Re-evaluation}}
+\title{\vspace{-1.5cm}\textbf{Reducing CO$_2$ Levels Using Genetic Algorithms}}
 \author{Cristian Lincu}
 \date{}
 
@@ -25,21 +25,20 @@
 This project provides a solution framework for minimizing CO$_2$ emission
 levels in a national power grid through machine learning methods. The data is
 collected via Energinet's public API, which provides real-time data about
-Denmark's power system. The framework retains the structure of the original
-formulation --- a regression model inferring CO$_2$ levels, gradient-boosted
-regressors forecasting demand and renewable production, and a genetic
-ensemble searching for the emission-minimizing distribution --- while
-correcting a set of modelling errors that made the original results
-unreliable. The central correction is that the optimizer was previously able
-to exploit its own surrogate: an unconstrained regression tree, fitted to
-confounded data, reported that emissions \emph{fall} when thermal generation
-rises, and the genetic heuristic duly proposed ramping thermal plants. This
-work constrains the emissions model to be physically monotone, evaluates every
-component chronologically rather than on shuffled splits, replaces
-scale-invariant coherence with explicit ramp limits, and measures the
-optimizer against the counterfactual in which dispatch is held fixed. The
-resulting system proposes feasible four-hour dispatch trajectories that reduce
-CO$_2$ intensity by approximately 55\% relative to that counterfactual.
+Denmark's power system. A monotone gradient-boosted ensemble infers the
+total emission rate implied by a dispatch, XGBoost regressors forecast demand
+and renewable production over a four-hour horizon, and a genetic ensemble
+searches for the emission-minimizing trajectory subject to the national
+energy balance, ramp limits, and an outcome-space plausibility floor. The
+reduction is measured against the counterfactual in which dispatch is held
+fixed. A rolling-origin backtest of 225 origins across five expanding
+training windows finds that the emissions model ranks two ways of serving
+the same load with a slope of 0.80 against metered outcomes, and that the
+schedule the optimizer proposes is 35\% cleaner than the dispatch that
+actually ran. After a ranking discount that accounts for imperfect delivery
+of predicted savings, the figure that the evidence supports is
+approximately 27\%. Most of that reduction is a reallocation of
+cross-border flows rather than a reduction in domestic combustion.
 \end{abstract}
 
 \section{Introduction}
@@ -51,18 +50,17 @@ prepared for this research consists of one year of records aggregated onto the
 15-minute grid used for imbalance settlement in Denmark, giving 34{,}600
 observations between September 2025 and September 2026.
 
-The main elements of this project are: a regression model for inferring
-CO$_2$ levels, XGBoost regressors for predicting demand and renewable energy
-production, and genetic algorithms for finding the optimal energy distribution
-with respect to CO$_2$ emission minimization. The goal is to infer the optimal
-resource combinations that minimize CO$_2$ emissions, depending on future
-demand and renewables production.
+The main elements of this project are: a monotone gradient-boosted ensemble
+for inferring CO$_2$ levels, XGBoost regressors for predicting demand and
+renewable energy production, and genetic algorithms for finding the optimal
+energy distribution with respect to CO$_2$ emission minimization. The goal
+is to infer the resource combinations that minimize CO$_2$ emissions,
+depending on future demand and renewables production.
 
-This paper is a re-evaluation of an earlier version of the same framework.
-The earlier version reported potential emission reductions of 50--75\%. Those
-figures did not survive scrutiny, for reasons set out in
-Section~\ref{sec:corrections}. The methodology below preserves as much of the
-original design as the physics allows, and states plainly where it does not.
+A live dashboard publishes a new four-hour schedule every thirty
+minutes.\footnote{\url{https://cristianlincu.github.io/CO2-Re-evaluation/}}
+Section~\ref{sec:backtest} reports a rolling-origin backtest of that same
+pipeline against the dispatch that actually ran.
 
 \section{Data and the energy balance}
 \label{sec:data}
@@ -81,15 +79,14 @@ exchange values are imports, negative ones are exports.
 
 The DK1-DK2 link is deliberately absent from $\mathcal{B}$. It is the Great
 Belt Power Link, which joins the two Danish bidding zones; power flowing
-across it is internal and cannot change national supply. Energinet excludes it
-from its own \texttt{Exchange\_Sum} field for precisely this reason, which is
-verifiable directly from the API: on an arbitrary record the eight
+across it is internal and cannot change national supply. Energinet excludes
+it from its own \texttt{Exchange\_Sum} field for precisely this reason,
+which is verifiable directly from the API: on an arbitrary record the eight
 cross-border flows sum to 3481.49~MW and \texttt{Exchange\_Sum} reports
-3481.49~MW, with the DK1-DK2 value of $-371.57$~MW sitting outside the total.
-The original formulation included DK1-DK2 in the balance, displacing demand by
-up to 600~MW against a tolerance of 1\% of demand. It remains a decision
-variable, because it carries zonal information the emissions model uses, but
-it no longer contributes to Equation~\eqref{eq:balance}.
+3481.49~MW, with the DK1-DK2 value of $-371.57$~MW sitting outside the
+total. The link remains a decision variable, because it carries zonal
+information the emissions model uses, but it does not contribute to
+Equation~\eqref{eq:balance}.
 
 \section{Methodology}
 
@@ -104,59 +101,64 @@ between Denmark and other countries or areas. The hyperparameters are tuned
 using randomized search, and the model is evaluated through time-series
 cross-validation.
 
-Two changes to this component are essential rather than cosmetic.
-
 \paragraph{The target is total emissions, not intensity.}
-Energinet publishes CO$_2$ as an intensity in g/kWh. Modelling intensity
-directly is what allowed the original surrogate to be exploited, because
-intensity is confounded: in Denmark, hours with high output from large thermal
-plants are also hours with high wind, so an unconstrained model learns that
-thermal generation predicts \emph{low} emissions. The model here predicts the
-total emission rate
+Energinet publishes CO$_2$ as an intensity in g/kWh. Intensity is
+confounded: in Denmark, hours with high output from large thermal plants are
+also hours with high wind, so an unconstrained model of intensity learns
+that thermal generation predicts \emph{low} emissions. The model here
+predicts the total emission rate
 \begin{equation}
 \Theta = \frac{\text{CO}_2\text{ intensity} \times D}{1000} \quad [\mathrm{t/h}],
 \end{equation}
 from which intensity is recovered as $1000\,\Theta / D$. Under
 consumption-based accounting every supply source carries a non-negative
-emission factor, so total emissions are monotonically non-decreasing in every
-source. That is imposed as a hard constraint on all eleven controllable
-features. Renewables are left unconstrained, since they are not a decision
-variable.
+emission factor, so total emissions are monotonically non-decreasing in
+every source. That is imposed as a hard constraint on all eleven
+controllable features. Renewables are left unconstrained, since they are
+not a decision variable.
 
 \paragraph{The estimator is an ensemble, and it reports its own reliability.}
-A single constrained regression tree lacks the capacity to fit the data
-without leaning on the confound, so the deployed estimator is a
-gradient-boosted ensemble of regression trees carrying the same monotonicity.
-A companion depth-capped tree partitions the feature space and supplies, for
-any candidate, the number of training observations $n(\mathbf{x})$ behind its
-leaf and the dispersion $\sigma(\mathbf{x})$ of the target within it. A
-Mahalanobis distance $d^2(\mathbf{x})$ to the training distribution measures
-how far a candidate sits from anything ever observed. Both quantities enter
-the fitness function, so the optimizer is penalized for leaving the region
-where the model has evidence.
+The deployed estimator is a gradient-boosted ensemble of regression trees
+carrying that monotonicity. A companion depth-capped tree partitions the
+feature space and supplies, for any candidate, the number of training
+observations $n(\mathbf{x})$ behind its leaf and the dispersion
+$\sigma(\mathbf{x})$ of the target within it. A Mahalanobis distance
+$d^2(\mathbf{x})$ to the training distribution measures how far a candidate
+sits from anything ever observed.
+
+A boosted ensemble of regression trees is unbounded below. Softplus is
+applied to the raw output so that predicted emissions cannot be negative;
+the transform is strictly increasing and therefore preserves every
+monotonic constraint, and it is the identity to within floating point
+across the range the data occupies. Separately, for the demand and
+renewable conditions of each horizon step the model looks up comparable
+hours in the training record and returns the 5th percentile of their
+metered emission rate. That quantity is the \emph{plausibility floor}: the
+optimizer is penalized for proposing an outcome cleaner than anything
+those conditions have ever produced.
 
 \subsection{II. Forecasting demand and renewable production}
 
 The XGBoost regressors provide multi-step forecasting for energy demand and
-renewable production over the next 16 time points, that is four hours ahead at
-15-minute resolution. These forecasts are important because the optimal power
-distribution has to match demand continuously; a persistent mismatch between
-supply and demand is what a system operator resolves through reserves, and the
-schedule the optimizer proposes must not create one. The distributable energy
-whose allocation is optimized is the difference between forecasted demand and
-forecasted renewable energy, $D_{XG} - R_{XG}$.
+renewable production over the next 16 time points, that is four hours ahead
+at 15-minute resolution. These forecasts are important because the optimal
+power distribution has to match demand continuously; a persistent mismatch
+between supply and demand is what a system operator resolves through
+reserves, and the schedule the optimizer proposes must not create one. The
+distributable energy whose allocation is optimized is the difference
+between forecasted demand and forecasted renewable energy,
+$D_{XG} - R_{XG}$.
 
-Renewable production is no longer extrapolated from its own recent output.
-Wind four hours ahead is not recoverable from the last few observations, and
-attempting it was the weakest part of the original system. Instead the model
-consumes Energinet's own physical forecast and learns a correction on top of
-it. The \texttt{Forecast5Hour} vintage is issued approximately five hours
-before its target and is therefore genuinely available at decision time across
-the whole horizon, which keeps the evaluation free of look-ahead.
+Renewable production is not extrapolated from its own recent output. Wind
+four hours ahead is not recoverable from the last few observations. The
+model consumes Energinet's own physical forecast and learns a correction
+on top of it. The \texttt{Forecast5Hour} vintage is issued approximately
+five hours before its target and is therefore genuinely available at
+decision time across the whole horizon.
 
 Every model is trained on a chronological split and reported against a
-persistence baseline, and the renewables model additionally against the raw
-Energinet forecast it post-processes.
+persistence baseline, and the renewables model additionally against the
+raw Energinet forecast it post-processes.
 
 \subsection{III. Genetic optimization of a dispatch trajectory}
 
@@ -174,35 +176,29 @@ At 1~MW resolution a single time step admits approximately $8 \times 10^{34}$
 combinations.
 
 \paragraph{A chromosome is a trajectory.}
-In the original formulation each forecasted time point was optimized
-independently, and coherence between consecutive solutions was encouraged by a
-cosine-similarity term. Cosine similarity is scale invariant --- two
-distributions differing by a factor of ten have similarity 1 --- so it could
-not constrain magnitudes, and in the deployed system it did not: consecutive
-five-minute solutions differed by more than 1{,}100~MW on a single
-interconnector. Here a chromosome is the whole trajectory. Writing $d = 11$
-for the number of genes per time step and $T = 16$ for the horizon, each
-individual is a matrix $X^{(j)} \in \mathbb{R}^{T \times d}$ whose rows
-$x^{(j)}_t$ are the distributions at each step, and the first generation is
+A chromosome is the whole four-hour path rather than a single time point.
+Writing $d = 11$ for the number of genes per time step and $T = 16$ for
+the horizon, each individual is a matrix
+$X^{(j)} \in \mathbb{R}^{T \times d}$ whose rows $x^{(j)}_t$ are the
+distributions at each step, and the first generation is
 \begin{equation}
 G =
 \begin{bmatrix}
 - & \operatorname{vec}(X^{(1)}) & - \\
 - & \operatorname{vec}(X^{(2)}) & - \\
   & \vdots &   \\
-- & \operatorname{vec}(X^{(m)}) & -
+- & \operatorname{vec}(X^{(m)}) & - \\
 \end{bmatrix} \in \mathbb{R}^{m \times Td},
 \end{equation}
-where $m$ is the size of the population. Coherence is then imposed directly,
-as a ramp constraint between consecutive rows, rather than hoped for through a
-similarity term.
+where $m$ is the size of the population. Coherence is imposed directly, as
+a ramp constraint between consecutive rows.
 
 \paragraph{The fitness function.}
 Each chromosome is evaluated using the regression ensemble to infer the
-CO$_2$ emission level implied by the solution it represents, while solutions
-that do not balance the power grid are penalized by an augmentation that
-significantly reduces their coupling chances. Each optimal trajectory
-minimizes
+CO$_2$ emission level implied by the solution it represents, while
+solutions that do not balance the power grid, violate a ramp limit, leave
+the region where the model has evidence, or propose an unprecedented
+outcome are penalized. Each optimal trajectory minimizes
 \begin{equation}
 X^{*} = \underset{X^{(j)}}{\operatorname{argmin}} \;
 \frac{1}{T}\sum_{t=1}^{T}
@@ -210,6 +206,7 @@ X^{*} = \underset{X^{(j)}}{\operatorname{argmin}} \;
 \xi_b\, \mathcal{P}_b(x_t) \;+\;
 \xi_r\, \mathcal{P}_r(x_t, x_{t-1}) \;+\;
 \xi_s\, \mathcal{P}_s(x_t) \;+\;
+\xi_f\, \mathcal{P}_f(x_t) \;+\;
 \zeta\, \Theta(x_t) \;+\;
 \gamma\, \sigma(x_t)
 \,\Big],
@@ -224,24 +221,31 @@ whose terms are, in order,
 \mathcal{P}_b(x_t) = \mathbf{I}\!\left(\left|D_{XG,t} - R_{XG,t} - \sum_{i \in \mathcal{B}} x_{t,i}\right| > \tau D_{XG,t}\right)
 \left(1 + \frac{\left|D_{XG,t} - R_{XG,t} - \sum_{i \in \mathcal{B}} x_{t,i}\right|}{\tau D_{XG,t}}\right),
 \end{equation}
-where $\mathbf{I}$ is the indicator function, $D_{XG}$ is the demand forecast
-and $R_{XG}$ the renewable forecast provided by the XGBoost regressors, and
-$\tau = 0.01$. The indicator alone, as used originally, produces a flat
-plateau that a heuristic cannot descend; scaling it by the relative size of
-the violation gives the search a gradient towards feasibility while preserving
-the hard threshold;
+where $\mathbf{I}$ is the indicator function, $D_{XG}$ is the demand
+forecast and $R_{XG}$ the renewable forecast provided by the XGBoost
+regressors, and $\tau = 0.01$. Scaling the indicator by the relative size
+of the violation gives the search a gradient towards feasibility while
+preserving the hard threshold;
 
 \item the \textbf{ramp penalty}
 $\mathcal{P}_r(x_t, x_{t-1}) = \sum_{i} \max\!\left(0, |x_{t,i} - x_{t-1,i}| - \rho_i\right)/\rho_i$,
 with $\rho_i$ the per-resource ramp limit and $x_0$ the latest observed
-distribution. This term replaces the cosine similarity of the original
-formulation and performs the role that term was intended to perform;
+distribution;
 
 \item the \textbf{support penalty}
 $\mathcal{P}_s(x_t) = \mathbf{I}\!\left(n(x_t) < n_{\min}\right) + \max\!\left(0, d^2(x_t)/d^2_{q} - 1\right)$,
 which confines the search to the region where the emissions model has
-evidence, with $n_{\min} = 20$ and $d^2_q$ the 99th percentile of the training
-Mahalanobis distances;
+evidence, with $n_{\min} = 20$ and $d^2_q$ the 99th percentile of the
+training Mahalanobis distances;
+
+\item the \textbf{plausibility-floor penalty}
+$\mathcal{P}_f(x_t) = \mathbf{I}\!\left(\Theta(x_t) < \phi_t\right)
+\left(1 + (\phi_t - \Theta(x_t))/\max(\phi_t, 1)\right)$,
+where $\phi_t$ is the 5th percentile of metered emission rates among
+training hours whose demand and renewables lie within 200~MW of the
+forecast for step $t$ (widened to 400~MW and then 800~MW if fewer than
+25 matches are found). This term asks whether the \emph{outcome} has
+precedent, which a distance in feature space does not;
 
 \item the \textbf{emissions level} $\Theta$ inferred by the regression
 ensemble, augmented by $\zeta$; and
@@ -251,231 +255,289 @@ makes the optimizer prefer solutions the model is confident about.
 \end{itemize}
 
 \paragraph{Feasibility by construction.}
-Every candidate is passed through a repair operator before evaluation. Walking
-the horizon forward, the admissible box at each step is the intersection of
-the technical limits with the ramp window around the previous step; the
-residual energy imbalance is then distributed across the balance-carrying
-resources in proportion to their remaining headroom. This turns feasibility
-from something the search must rediscover into a property of the
-representation, so the evolutionary effort is spent on emissions instead.
+Every candidate is passed through a repair operator before evaluation.
+Walking the horizon forward, the admissible box at each step is the
+intersection of the technical limits with the ramp window around the
+previous step; the residual energy imbalance is then distributed across
+the balance-carrying resources in proportion to their remaining headroom.
+This turns feasibility from something the search must rediscover into a
+property of the representation, so the evolutionary effort is spent on
+emissions instead.
 
 \paragraph{Implementation.}
-The ensemble of independent optimizers is evaluated as a single batched array,
-an island model with periodic migration of the best individual between
-islands. Emissions, dispersion, leaf support and novelty all come out of one
-traversal per generation. With 16 islands, populations of 150 and 200
-generations --- $4.8\times10^{5}$ evaluations --- a full solve takes
-approximately 57 seconds, which fits comfortably inside a scheduled job
-refreshing every 30 minutes.
+The ensemble of independent optimizers is evaluated as a single batched
+array, an island model with periodic migration of the best individual
+between islands. Emissions, dispersion, leaf support and novelty all come
+out of one traversal per generation. With 16 islands, populations of 150
+and 200 generations --- $4.8\times10^{5}$ evaluations --- a full solve
+takes approximately 80 seconds, which fits comfortably inside a scheduled
+job refreshing every 30 minutes.
 
 \section{Results}
 
 \subsection{The emissions model}
 
-Table~\ref{tab:co2} reports the emissions model against the original
-formulation on identical data. Two comparisons matter. The original tree
-evaluated with a shuffled split achieves 5.77~g/kWh, but a shuffled split on a
-15-minute series places near-duplicate neighbours on both sides of the
-partition; evaluated chronologically, the same model achieves 13.01~g/kWh. The
-constrained ensemble achieves 11.05~g/kWh --- better than the original
-managed under honest evaluation, while additionally being physically valid.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lccc}
-\toprule
-Model & Evaluation & Intensity MAE (g/kWh) & Monotone \\
-\midrule
-Fully grown tree, intensity & shuffled split & 5.77 & no \\
-Fully grown tree, intensity & chronological & 13.01 & no \\
-Monotone ensemble, total emissions & chronological & \textbf{11.05} & yes \\
-\bottomrule
-\end{tabular}
-\caption{CO$_2$ model accuracy. The shuffled-split figure is reported because
-it is what the original framework published; it is inflated by leakage between
-adjacent observations.}
-\label{tab:co2}
-\end{table}
-
-Figure~\ref{fig:probe} shows why the constraint matters more than the accuracy.
-Holding every other resource fixed and sweeping large-plant output from 0 to
-1500~MW, the original model reports total emissions falling to a minimum at
-300~MW before rising. A genetic algorithm minimizing that surface will ramp
-thermal generation, which is exactly what the deployed system did. The
-constrained model is monotone by construction and its minimum is at zero.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{figures/probe.pdf}
-\caption{Response of each emissions model to ramping thermal generation with
-all other resources held fixed. The original model rewards the optimizer for
-starting thermal plants.}
-\label{fig:probe}
-\end{figure}
+On a chronological hold-out of 6{,}920 observations (June--September 2026)
+the monotone ensemble achieves an intensity MAE of 11.05~g/kWh and a total
+emission-rate $R^2$ of 0.889. Holding every other resource fixed and
+sweeping large-plant output from 0 to 1{,}500~MW, predicted total
+emissions rise by 384~t/h and the minimum sits at zero, which is the
+relationship the monotonicity constraint is there to enforce.
 
 \subsection{The forecasts}
 
 Figure~\ref{fig:forecast} reports forecast error against horizon on a
 chronological hold-out. Demand RMSE grows from 88.9~MW at 15 minutes to
 374.5~MW at four hours, against a persistence baseline of 98.3~MW and
-815.8~MW. Renewables RMSE grows from 135.9~MW to 468.6~MW, against 151.7~MW
-and 1394.0~MW for persistence and a flat 699.5~MW for the raw Energinet
-forecast; post-processing that forecast with recent observations improves on
-it at every horizon.
+815.8~MW. Renewables RMSE grows from 135.9~MW to 468.6~MW, against
+151.7~MW and 1394.0~MW for persistence and a flat 699.5~MW for the raw
+Energinet forecast; post-processing that forecast with recent observations
+improves on it at every horizon.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\textwidth]{figures/forecast_skill.pdf}
-\caption{Forecast skill against horizon, with baselines.}
+\caption{Forecast skill against horizon, with persistence and, for
+renewables, the raw Energinet forecast as baselines.}
 \label{fig:forecast}
 \end{figure}
 
 \subsection{The optimizer}
 
 An evolutionary heuristic is only worth its cost if it beats random search
-under the same evaluation budget. Figure~\ref{fig:convergence} shows that it
-does: at $4.8\times10^{5}$ evaluations and matched wall-clock time, the
-genetic ensemble reaches a mean intensity of 60.8~g/kWh against 87.7~g/kWh for
-random search, and does so while keeping every step inside the region where
-the emissions model has support, which random search does not.
+under the same evaluation budget. Figure~\ref{fig:convergence} shows that
+it does: at $4.8\times10^{5}$ evaluations and matched wall-clock time, the
+genetic ensemble reaches a mean intensity of 60.8~g/kWh against
+87.7~g/kWh for random search, and does so while keeping every step inside
+the region where the emissions model has support.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\textwidth]{figures/convergence.pdf}
-\caption{Left: convergence against random search at equal evaluation budget.
-Right: the optimized intensity trajectory against the hold-current
-counterfactual, with the emissions model's own dispersion shaded.}
+\caption{Left: convergence against random search at equal evaluation
+budget. Right: the optimized intensity trajectory against the
+hold-current counterfactual, with the emissions model's own dispersion
+shaded.}
 \label{fig:convergence}
 \end{figure}
 
 \subsection{How the reduction is measured}
 \label{sec:attribution}
 
-The original framework compared optimized future emissions against the
-\emph{present} measured value. That comparison credits the optimizer with
+The reduction reported on the live dashboard is measured against a
+hold-current counterfactual, in which demand and renewables follow their
+forecasts but the controllable resources stay where they are. Comparing
+against the present measured value instead would credit the optimizer with
 whatever the weather was going to do anyway: if wind is rising over the
 horizon, intensity falls without any intervention at all.
 
-The reduction reported here is measured against a hold-current counterfactual,
-in which demand and renewables follow their forecasts but the controllable
-resources stay where they are. On the representative solve shown in
-Figure~\ref{fig:dispatch}, the present measured intensity was 204.1~g/kWh, the
-counterfactual averaged 140.0~g/kWh over the horizon, and the optimized
-trajectory averaged 63.8~g/kWh. The honest reduction attributable to
-re-dispatch is therefore 54.4\%, not the 68.7\% that comparison against the
-present value would have produced.
+On the representative solve shown in Figure~\ref{fig:dispatch}, the
+present measured intensity was 204.1~g/kWh, the counterfactual averaged
+140.0~g/kWh over the horizon, and the optimized trajectory averaged
+63.8~g/kWh. The reduction attributable to re-dispatch on that afternoon
+is therefore 54.4\%. That number is a single solve. The distribution
+across seasons is the subject of Section~\ref{sec:backtest}.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\textwidth]{figures/dispatch.pdf}
-\caption{An optimized dispatch trajectory. As forecast wind rises through the
-afternoon the schedule withdraws from German imports, crossing into export,
-and shifts towards Norwegian hydro, while thermal output stays low. Every
-change respects its ramp limit.}
+\caption{An optimized dispatch trajectory. As forecast wind rises through
+the afternoon the schedule withdraws from German imports, crossing into
+export, and shifts towards Norwegian hydro, while thermal output stays
+low. Every change respects its ramp limit.}
 \label{fig:dispatch}
 \end{figure}
 
-The trajectory itself is physically legible, which the original solutions were
-not. Every step satisfies the energy balance to within a fraction of a
-megawatt and every change respects its ramp limit; the maximum balance error
-over the horizon is $2.4\times10^{-4}$~MW.
+Every step of that trajectory satisfies the energy balance to within a
+fraction of a megawatt and every change respects its ramp limit; the
+maximum balance error over the horizon is $2.4\times10^{-4}$~MW.
 
-\section{What changed relative to the original formulation}
-\label{sec:corrections}
+\section{Historical backtest}
+\label{sec:backtest}
 
-\begin{table}[h]
+A single afternoon does not establish that the system works. The live
+pipeline reports what the emissions model says about a schedule the model
+itself helped to choose. The backtest asks whether those claims survive
+contact with the dispatch that actually ran, under models that have never
+seen the period being scored.
+
+The year is split into five expanding windows. Cutoffs fall on 4 February,
+21 March, 6 May, 21 June and 6 August 2026. Within each fold the emissions
+ensemble, both forecasters and the operating envelope are fitted only on
+data preceding the cutoff; hyperparameters are tuned once on the earliest
+window and reused, so no fold sees its own future. Forty-five origins are
+drawn at random from each test window, restricted to spans that sit on an
+unbroken 15-minute record. That yields 225 origins and 3{,}600 horizon
+steps between February and September. Each origin is replayed at the
+deployed genetic-algorithm budget.
+
+\subsection{The emissions model against the meters}
+
+On the dispatch that actually happened --- the only place in the exercise
+where a ground truth exists --- the out-of-sample model achieves $R^2 =
+0.941$, a mean absolute error of 49~t/h, and a signed bias of
+$-14$~t/h. The median relative error is 12\%.
+
+That is a test of levels. The optimizer never asks the model for a level;
+it asks which of two schedules is cleaner. Figure~\ref{fig:ranking} tests
+exactly that comparison, on pairs of historical moments matched to within
+75~MW of demand and of renewables. The balance identity then forces both
+members of a pair to serve the same load, so what differs is purely how
+it was served. Both members have a metered outcome.
+
+\begin{figure}[h]
 \centering
-\small
-\begin{tabular}{p{5.4cm}p{9.4cm}}
-\toprule
-Issue & Correction \\
-\midrule
-Optimizer exploited its own surrogate & Emissions model constrained monotone in every supply source; target changed from intensity to total emissions \\
-Fully grown tree acted as a lookup table & Depth- and leaf-capped boosted ensemble; 25{,}863 leaves reduced to a bounded ensemble \\
-No guard against unseen combinations & Leaf support and Mahalanobis novelty penalties in the fitness function \\
-Shuffled splits on a time series & Chronological splits and time-series cross-validation throughout, with persistence baselines \\
-Cosine similarity used for coherence & Explicit per-resource ramp limits derived from observed 15-minute changes \\
-DK1-DK2 counted in the national balance & Restricted to the eight cross-border links, matching Energinet's own convention \\
-Results clamped so they could not look worse than the status quo & Removed; the counterfactual is published alongside the optimized result \\
-Reduction measured against present emissions & Measured against the hold-current counterfactual over the same horizon \\
-Independent per-step optimization & Trajectory chromosome with coupled ramp constraints \\
-Search bounds fixed and stale & Bounds and ramp limits re-derived from the training year, capped by technical capacity \\
-\bottomrule
-\end{tabular}
-\caption{Corrections applied to the original framework.}
-\end{table}
+\includegraphics[width=\textwidth]{figures/backtest_ranking.pdf}
+\caption{Predicted versus metered difference in the total emission rate,
+for pairs of hours matched on demand and wind. A slope of 1 would mean a
+predicted saving of $X$~t/h is delivered in full. Left: all 59{,}432
+pairs. Right: the 27{,}034 pairs whose dispatch difference points in the
+same direction as the optimizer's own move.}
+\label{fig:ranking}
+\end{figure}
 
-Two further errors are worth recording because they were silent. The
-\texttt{PowerSystemRightNow} schema changed after the original models were
-trained: the \texttt{ImbalanceDK1}, \texttt{ImbalanceDK2} and
-\texttt{mFRRActivated} fields no longer exist. The original notebooks selected
-features by position, so the same code now silently selects different columns.
-All feature selection here is by name. Separately, the deployed pipeline used
-a selection-pressure parameter of 150 where the notebook that validated the
-method used 8, which collapses the population to near-clones of a single
-individual within a few generations.
+When the model says one schedule is $X$~t/h cleaner, the meters deliver
+$0.80X$ on average ($r = 0.83$, sign agreement 78\%). Restricted to
+pairs within seven days, which controls for seasonality, the slope is
+0.76. Restricted to pairs that resemble the optimizer's characteristic
+move --- less domestic thermal, more low-carbon import --- the slope is
+0.83 ($r = 0.84$). A linear model of empirical marginal emission factors,
+fitted on the same training windows, ranks the same pairs far worse
+($r = 0.58$). The constrained ensemble is therefore earning its
+complexity, and the slope is measured over a range the grid has actually
+explored: the optimizer's median L1 move is 3{,}863~MW, and 56\% of the
+observed pairs differ by at least that much.
+
+Matching is never perfect. Two moments with identical demand and wind can
+still differ in what the neighbouring grids were burning, which the
+feature set cannot see. The recovered slope is therefore an upper bound
+on how well any model of these features could rank dispatches.
+
+\subsection{What the optimizer would have claimed}
+
+Pooled over all 3{,}600 horizon steps, the pipeline reports a 35.1\%
+reduction against the hold-current counterfactual and a 35.8\% reduction
+against the dispatch that actually ran. After the two guards of
+Section~\ref{sec:co2} --- softplus on the ensemble output and the
+plausibility floor in the fitness --- no proposed step has a negative
+predicted emission rate, and 99.9\% of steps sit at or above the
+historical floor computed from the forecast conditions of that origin.
+
+Applying the ranking slope of 0.83, a predicted tonne is 0.83 of a
+delivered tonne, which takes the 35.8\% to 29.7\%. Capping each proposal
+at the 5th percentile of historically observed outcomes under comparable
+demand and wind, then applying the same discount, gives 27.2\%. That is
+the figure the evidence supports. It is stable across the year: the
+pooled reduction against realised dispatch is between 31\% and 39\% in
+every fold.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/backtest_discount.pdf}
+\caption{Left: the reduction after each correction that the backtest
+can apply. Right: the share of the remaining saving that comes from
+running less domestic generation versus from changing the cross-border
+schedule.}
+\label{fig:discount}
+\end{figure}
+
+\subsection{Where the reduction comes from}
+
+Of the 129~t/h the model attributes to re-dispatch, 109~t/h (85\%) comes
+from changing the cross-border schedule and 17~t/h (13\%) from running
+less domestic thermal generation. Over a four-hour horizon the optimizer
+moves Danish generation by a median of 10~MWh and net imports by a median
+of 389~MWh. Under consumption-based accounting that is a real reduction
+in Denmark's attributed intensity. Whether it is a reduction in
+atmospheric CO$_2$ depends on the Nordic and German marginal plants,
+which this system does not observe.
+
+\subsection{Feasibility once the forecast is replaced by what happened}
+
+The genetic algorithm balances the schedule against its own forecast. Under
+the demand and renewables that materialised, the mean absolute imbalance
+is 87~MW (1.9\% of demand) at 15 minutes and 489~MW (10.5\%) at four
+hours. Only 13\% of individual steps remain inside the 1\% tolerance the
+optimizer enforces. The residual is the forecast error --- 221~MW MAE for
+demand and 286~MW MAE for renewables, averaged over the horizon --- which
+a real operator covers with regulating reserve. That plant is typically
+the fastest and dirtiest on the system, and its emissions cost is not in
+the fitness function.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/backtest_diagnostics.pdf}
+\caption{Left: the distribution of predicted emission rates on
+optimized proposals; the physical zero is marked. Right: mean absolute
+imbalance of the optimized schedule under realised conditions, against
+the 1\% tolerance the optimizer enforces on its own forecast.}
+\label{fig:diagnostics}
+\end{figure}
+
+The Mahalanobis novelty guard, by contrast, barely discriminates.
+Optimized points have a \emph{lower} median novelty (12.2) than realised
+ones (14.7), and 98\% of both pass. Model error on realised points does
+grow with novelty, from 38~t/h in the lowest quintile to 65~t/h in the
+highest, so the signal exists; a distance on the marginal feature
+distribution does not fire on the proposals that matter. The
+plausibility floor is what closed that route.
 
 \section{Limitations}
 
-The framework does not model unit commitment. Large-plant output is treated as
-a single aggregate quantity, where in reality it is dozens of units with
-individual minimum stable loads and start-up times.
+The framework does not model unit commitment. Large-plant output is
+treated as a single aggregate quantity, where in reality it is dozens of
+units with individual minimum stable loads and start-up times.
 
-Interconnector limits are fixed over the horizon. Real transfer capacities are
-published per market time unit and are frequently derated; a production system
-would consume them rather than assume them.
+Interconnector limits are fixed over the horizon. Real transfer
+capacities are published per market time unit and are frequently derated;
+a production system would consume them rather than assume them.
 
-The model takes no account of exchange contract terms or energy prices, so a
-proposed schedule may be physically feasible and economically impossible.
+The model takes no account of exchange contract terms or energy prices,
+so a proposed schedule may be physically feasible and economically
+impossible. Cross-border flows are in any case outcomes of coupled
+European market clearing, not dials a single operator turns. The
+backtest measures what the emissions model says about a hypothetical
+re-dispatch; it does not establish that any actor could have executed
+it.
 
-The emissions model is compressive, as a regularized estimator fitted to a
-long-tailed target will be. Replaying the most recent 30 hours of observed
-states gives a mean absolute error of 9.9~g/kWh with a bias of $-8.2$~g/kWh:
-it over-predicts slightly at very low intensities and under-predicts at high
-ones. Absolute emission levels on the dashboard should therefore be read as
+The emissions model is compressive, as a regularized estimator fitted to
+a long-tailed target will be. Absolute emission levels should be read as
 estimates with roughly a 10~g/kWh error bar, not as measurements. The
-\emph{reduction} is more robust than the levels, because the counterfactual
-and the optimized trajectory are evaluated with the same model and a shared
-bias largely divides out; but the ratio is itself compressed towards one, so
-the reported percentage is better treated as an indication of direction and
-rough magnitude than as a precise figure.
+\emph{reduction} is more robust than the levels, because the
+counterfactual and the optimized trajectory are evaluated with the same
+model; the ranking test of Section~\ref{sec:backtest} is the quantity
+that converts that shared evaluation into evidence.
 
 Most importantly, Energinet's CO$_2$ figure is a \emph{consumption-based}
-intensity for Denmark: it assigns emission factors to imports. A schedule can
-therefore lower the Danish number by importing more low-carbon power from
-Norway or Sweden without lowering emissions anywhere. Nordic hydro export
-capacity is finite, so power drawn to Denmark is power not delivered
-elsewhere, and the displaced consumer may burn gas instead. The reductions
-reported here are reductions in Denmark's attributed intensity. Establishing
-how much of that is genuine abatement requires marginal emissions data for the
-surrounding system, which is outside the scope of this work. This caveat
-applies equally to the original framework, where it was not stated.
+intensity for Denmark: it assigns emission factors to imports. A schedule
+can therefore lower the Danish number by importing more low-carbon power
+from Norway or Sweden without lowering emissions anywhere. Nordic hydro
+export capacity is finite, so power drawn to Denmark is power not
+delivered elsewhere, and the displaced consumer may burn gas instead. The
+reductions reported here are reductions in Denmark's attributed
+intensity. Establishing how much of that is genuine abatement requires
+marginal emissions data for the surrounding system, which is outside the
+scope of this work.
 
 \section{Future work}
 
-Future work for customizing this model to any power grid might take into
-consideration other important aspects, like in-depth details about exchange
-contract terms, to the extent of their availability, and energy prices, and
-include them in the evaluation of solutions, extending the realism initiated
-by the ramp constraints.
-
-Three directions follow from the limitations above. Replacing average with
-marginal emission factors would let the objective express abatement rather
-than attribution. Introducing semi-continuous constraints for minimum stable
-load would turn the problem into a genuine mixed-integer program, where the
-choice of an evolutionary heuristic could be benchmarked against an exact
-solver. And a systematic backtest, replaying historical periods and scoring
-proposed dispatch against realised outcomes, would convert the results
-reported here from a demonstration into evidence.
+Three directions follow from the limitations above. Replacing average
+with marginal emission factors would let the objective express abatement
+rather than attribution. Restricting the decision variables to resources
+an identified actor actually controls would turn the output from a
+hypothetical into a recommendation. And introducing semi-continuous
+constraints for minimum stable load would turn the problem into a
+genuine mixed-integer program, where the choice of an evolutionary
+heuristic could be benchmarked against an exact solver.
 
 \vspace{0.6em}
 \noindent\rule{\textwidth}{0.4pt}
 
 \noindent\small
 Visit the web app, which includes a dynamic comparison between recent
-emissions in Denmark's power system, the hold-current counterfactual, and the
-minimized CO$_2$ levels over the next four hours, as well as the optimal
-energy resource distributions leading to these emission levels.
+emissions in Denmark's power system, the hold-current counterfactual, and
+the minimized CO$_2$ levels over the next four hours, as well as the
+optimal energy resource distributions leading to these emission levels
+and the historical backtest summarised in Section~\ref{sec:backtest}.
 
 \end{document}

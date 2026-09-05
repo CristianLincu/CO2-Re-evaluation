@@ -1,0 +1,67 @@
+{
+  "n_periods": 225,
+  "n_steps": 3600,
+  "model_bias_tph": -13.630255928818988,
+  "model_mae_tph": 49.021094893795954,
+  "model_r2": 0.9406907093367264,
+  "ranking_all": {
+    "slope": 0.7979250350280163,
+    "r": 0.8329608157278039,
+    "sign_agreement": 0.7833658635078745,
+    "n": 59432
+  },
+  "ranking_marginal": {
+    "slope": 0.7243601024966821,
+    "r": 0.5838391775433786,
+    "sign_agreement": 0.7119901736438282,
+    "n": 59432
+  },
+  "ranking_near": {
+    "slope": 0.7566990030012757,
+    "r": 0.8067740328013593,
+    "sign_agreement": 0.7442978940464913,
+    "n": 27446
+  },
+  "ranking_near_marginal": {
+    "slope": 0.7628095534174946,
+    "r": 0.5360373211874645,
+    "sign_agreement": 0.6948189171463965,
+    "n": 27446
+  },
+  "ranking_large": {
+    "slope": 0.8686301784579525,
+    "r": 0.8721651677027417,
+    "sign_agreement": 0.8522008345672365,
+    "n": 14858
+  },
+  "ranking_aligned": {
+    "slope": 0.8307434992244542,
+    "r": 0.8384838609522716,
+    "sign_agreement": 0.795923651697862,
+    "n": 27034
+  },
+  "ranking_aligned_marginal": {
+    "slope": 0.6923009313126189,
+    "r": 0.5005586286198358,
+    "sign_agreement": 0.6966412665532292,
+    "n": 27034
+  },
+  "optimiser_move_mw": 3862.8510435106873,
+  "pairs_at_least_as_large_pct": 56.084264369363304,
+  "pooled_reduction_vs_real_pct": 35.78412334362101,
+  "pooled_reduction_vs_hold_pct": 35.0760129899969,
+  "reduction_vs_real_tph": 128.9181997574459,
+  "negative_prediction_pct": 0.0,
+  "claim_to_error_ratio": 2.629851496314939,
+  "delta_gen_tph": -16.98460652618007,
+  "delta_xb_tph": -109.29871957461285,
+  "gen_energy_delta_mwh": -15.958511291716842,
+  "xb_energy_delta_mwh": 161.35658092668143,
+  "steps_within_tolerance_pct": 13.333333333333334,
+  "balance_step1_pct": 1.8797267173613585,
+  "balance_step16_pct": 10.451918303803945,
+  "below_historical_min_pct": 9.821428571428571,
+  "below_historical_p05_pct": 29.002463054187196,
+  "capped_reduction_pct": 32.720230237721736,
+  "capped_discounted_pct": 27.182118563114752
+}

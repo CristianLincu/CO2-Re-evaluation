@@ -185,7 +185,7 @@ def main():
     )
 
     # --- wrap and persist ----------------------------------------------------
-    safe = build_safe_model(deployed, deployed_tree, X, y, CO2_FEATURES)
+    safe = build_safe_model(deployed, deployed_tree, X, y, CO2_FEATURES, demand=demand)
     _, _, support, novelty = safe.evaluate(X_test)
     in_dist = safe.is_supported(support, novelty)
 
@@ -193,6 +193,39 @@ def main():
     metrics["test_in_distribution_pct"] = float(in_dist.mean() * 100)
     print(f"\nnovelty threshold (Mahalanobis^2 @ q99) = {safe.novelty_threshold:.2f}")
     print(f"test rows judged in-distribution: {metrics['test_in_distribution_pct']:.1f}%")
+
+    # The softplus output transform exists to stop the optimiser walking off
+    # the bottom of the surface, which the backtest caught it doing on 17% of
+    # proposed steps. It turns out the untransformed ensemble also goes
+    # negative on genuine observations: the cleanest hours carry about 12 t/h
+    # against a residual spread several times that, so squared-error fitting
+    # pushes part of the low tail below zero. Emissions cannot be negative, so
+    # the transform corrects a real defect rather than merely hiding one.
+    raw = deployed.predict(X)
+    transformed = safe.predict_total(X)
+    negative = float((raw < 0).mean() * 100)
+    settled = float(np.abs(transformed - raw)[raw > 20.0].max())
+
+    metrics["raw_negative_on_training_pct"] = negative
+    metrics["softplus_shift_above_20tph"] = settled
+    metrics["rmse_before_transform"] = float(root_mean_squared_error(y, raw))
+    metrics["rmse_after_transform"] = float(root_mean_squared_error(y, transformed))
+
+    print(f"\ntraining rows where the raw ensemble predicts negative emissions: {negative:.2f}%")
+    print(f"largest shift where the prediction is above 20 t/h: {settled:.2e} t/h")
+    print(
+        f"in-sample RMSE {metrics['rmse_before_transform']:.2f} -> "
+        f"{metrics['rmse_after_transform']:.2f} t/h"
+    )
+    assert settled < 1e-3, "transform is distorting predictions in the plausible range"
+    assert metrics["rmse_after_transform"] <= metrics["rmse_before_transform"], "transform hurts fit"
+
+    # And the floor must admit what actually happened. If observed operating
+    # points fell below their own floor, the quantile would be too generous.
+    floor = safe.emission_floor(demand[split:], X_test[:, 0])
+    admits = np.mean(y[split:] >= floor)
+    metrics["floor_admits_observed_pct"] = float(admits * 100)
+    print(f"held-out hours at or above their own plausibility floor: {100 * admits:.1f}%")
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     dump(safe, MODELS_DIR / "co2_model.joblib")

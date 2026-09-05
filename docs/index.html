@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Reducing CO₂ Levels Using Genetic Algorithms — A Re-evaluation</title>
+<title>Reducing CO₂ Levels Using Genetic Algorithms</title>
 <meta name="description" content="Carbon-aware dispatch optimisation for Denmark's power grid using a monotone emissions model and a genetic algorithm over four-hour trajectories." />
 <link rel="stylesheet" href="css/styles.css" />
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
@@ -15,7 +15,7 @@
 <body>
 <div class="container">
 
-  <h1>Reducing CO<sub>2</sub> Levels Using Genetic Algorithms<span class="subtitle">A Re-evaluation</span></h1>
+  <h1>Reducing CO<sub>2</sub> Levels Using Genetic Algorithms</h1>
 
   <div id="status" class="status-bar loading">Loading data…</div>
 
@@ -23,10 +23,9 @@
     This project provides a solution framework for minimizing CO<sub>2</sub> emission levels in a national
     power grid through machine learning methods. Data is collected via
     <a href="https://www.energidataservice.dk/tso-electricity/PowerSystemRightNow">Energinet's public API</a>,
-    which provides real-time data about Denmark's power system. The framework keeps the structure of the
-    original formulation — a regression model inferring CO<sub>2</sub> levels, gradient-boosted regressors
-    forecasting demand and renewable production, and a genetic ensemble searching for the emission-minimizing
-    distribution — while correcting the modelling errors that made the original results unreliable.
+    which provides real-time data about Denmark's power system. A monotone gradient-boosted ensemble infers
+    the total emission rate implied by a dispatch, XGBoost regressors forecast demand and renewable
+    production, and a genetic ensemble searches for the emission-minimizing four-hour trajectory.
   </p>
 
   <h2>Current state</h2>
@@ -36,8 +35,9 @@
   <p class="caption">
     The headline reduction is measured against the <strong>hold-current counterfactual</strong>: what emissions
     would be over the same four hours if demand and renewables follow their forecasts but the controllable
-    resources stay exactly where they are. Comparing against the present measured value instead — as the
-    original version did — credits the optimiser with whatever the weather was going to do anyway.
+    resources stay exactly where they are. Comparing against the present measured value instead credits the
+    optimiser with whatever the weather was going to do anyway. The historical backtest below is the
+    evidence for how much of that headline survives contact with the dispatch that actually ran.
   </p>
 
   <div class="chart-wrap" id="co2-chart"></div>
@@ -66,7 +66,7 @@
   <div class="chart-wrap" id="dispatch-chart"></div>
   <p class="caption">
     Fig 3: The same schedule as a trajectory. Because a chromosome is the whole four-hour path rather than a
-    single time point, consecutive steps are coupled by ramp constraints instead of a similarity term.
+    single time point, consecutive steps are coupled by ramp constraints.
   </p>
 
   <h2>Methodology</h2>
@@ -77,12 +77,13 @@
       12 features: renewable energy production (solar and wind), energy produced by power plants with installed
       capacity greater or equal to 100 MW, energy produced by power plants with installed capacity less than
       100 MW, and the nine energy exchanges between Denmark and other countries or areas (DK1-DE, DK1-NL,
-      DK1-GB, DK1-NO, DK1-SE, DK1-DK2, DK2-DE, DK2-SE, Bornholm-SE). Two properties make it safe to optimise
-      against. It predicts <em>total</em> emissions rather than intensity, and it is constrained to be
-      monotonically non-decreasing in every supply source — which is physically true under consumption-based
-      accounting, and which removes the confounded relationship an unconstrained model learns from
-      wind-correlated data. It also reports its own reliability: the training support behind each prediction
-      and the distance of each candidate from anything ever observed.
+      DK1-GB, DK1-NO, DK1-SE, DK1-DK2, DK2-DE, DK2-SE, Bornholm-SE). It predicts <em>total</em> emissions
+      rather than intensity, and it is constrained to be monotonically non-decreasing in every supply source
+      — which is physically true under consumption-based accounting. Softplus on the ensemble output keeps
+      predictions above zero. A companion tree reports the training support behind each prediction, a
+      Mahalanobis score measures distance from anything ever observed, and a plausibility floor — the 5th
+      percentile of metered outcomes under comparable demand and wind — stops the search proposing an
+      emission rate the grid has never achieved.
     </p>
     <p>
       <strong>II. Forecasting.</strong> XGBoost regressors provide multi-step forecasting for demand and
@@ -105,18 +106,19 @@
       where $m$ is the size of the population. Each trajectory minimises
     </p>
     <p style="text-align:center">
-      $$X^{*} = \underset{X^{(j)}}{\operatorname{argmin}} \; \frac{1}{T}\sum_{t=1}^{T} \Big[ \xi_b\,\mathcal{P}_b(x_t) + \xi_r\,\mathcal{P}_r(x_t, x_{t-1}) + \xi_s\,\mathcal{P}_s(x_t) + \zeta\,\Theta(x_t) + \gamma\,\sigma(x_t) \Big]$$
+      $$X^{*} = \underset{X^{(j)}}{\operatorname{argmin}} \; \frac{1}{T}\sum_{t=1}^{T} \Big[ \xi_b\,\mathcal{P}_b(x_t) + \xi_r\,\mathcal{P}_r(x_t, x_{t-1}) + \xi_s\,\mathcal{P}_s(x_t) + \xi_f\,\mathcal{P}_f(x_t) + \zeta\,\Theta(x_t) + \gamma\,\sigma(x_t) \Big]$$
     </p>
     <p>
       where $\mathcal{P}_b$ is the grid imbalance penalty, built on the indicator function
       $\mathbf{I}\left(\left|D_{XG} - R_{XG} - \sum_{i \in \mathcal{B}} x_i\right| > 0.01\,D_{XG}\right)$ and
       scaled by the relative size of the violation so the heuristic has a gradient to descend;
-      $\mathcal{P}_r$ is the ramp penalty between consecutive steps, which replaces the scale-invariant cosine
-      similarity of the original formulation; $\mathcal{P}_s$ confines the search to the region where the
-      emissions model has evidence; $\Theta$ is the emissions level inferred by the regression ensemble,
-      augmented by $\zeta$; and $\sigma$ is the model's own dispersion, augmented by $\gamma$, so the
-      optimiser prefers solutions it is confident about. The sum runs only over the eight cross-border links
-      $\mathcal{B}$: the DK1-DK2 link joins two Danish bidding zones, so it cannot change national supply.
+      $\mathcal{P}_r$ is the ramp penalty between consecutive steps; $\mathcal{P}_s$ confines the search to
+      the region where the emissions model has evidence; $\mathcal{P}_f$ is the plausibility-floor penalty,
+      which refuses outcomes cleaner than the historical 5th percentile under the same demand and wind;
+      $\Theta$ is the emissions level inferred by the regression ensemble, augmented by $\zeta$; and
+      $\sigma$ is the model's own dispersion, augmented by $\gamma$. The sum runs only over the eight
+      cross-border links $\mathcal{B}$: the DK1-DK2 link joins two Danish bidding zones, so it cannot
+      change national supply.
     </p>
     <p>
       Every candidate passes through a repair operator that enforces bounds, ramp limits and the energy
@@ -127,21 +129,63 @@
 
   <a class="paper-link" href="paper/CO2_Reevaluation.pdf">Download the research paper (PDF)</a>
 
+  <h2>Historical backtest</h2>
+
+  <p>
+    The live numbers above are what the emissions model says about a schedule it helped to choose. The
+    backtest asks whether those claims survive contact with the dispatch that actually ran. The year is
+    split into five expanding windows. In each fold the emissions model, both forecasters and the operating
+    envelope are fitted only on data preceding the cutoff; 45 origins are then replayed at the deployed
+    genetic-algorithm budget. That is 225 origins and 3,600 horizon steps between February and September
+    2026.
+  </p>
+
+  <div class="metrics" id="backtest-metrics"></div>
+
+  <figure class="static-fig">
+    <img src="figures/backtest_ranking.png" alt="Predicted versus metered emission differences for matched historical pairs" />
+  </figure>
+  <p class="caption">
+    Fig 4: Under matched demand and wind, does a predicted saving arrive? When the model says one schedule
+    is $X$ t/h cleaner, the meters deliver $0.80X$ on average, rising to $0.83X$ for moves that resemble
+    the optimiser's own direction.
+  </p>
+
+  <figure class="static-fig">
+    <img src="figures/backtest_discount.png" alt="Reduction after each backtest correction, and the share from domestic generation versus cross-border flows" />
+  </figure>
+  <p class="caption">
+    Fig 5: The 35% the pipeline would have reported, the 27% that remains after capping proposals at
+    historically observed outcomes and discounting by the ranking slope, and the share of that saving that
+    comes from running less domestic generation versus changing who Denmark imports from.
+  </p>
+
+  <figure class="static-fig">
+    <img src="figures/backtest_diagnostics.png" alt="Distribution of predicted emissions and forecast-induced imbalance" />
+  </figure>
+  <p class="caption">
+    Fig 6: After the positivity transform, no proposal falls below zero. The schedule still only balances
+    against its own forecast: under realised conditions the imbalance grows from 1.9% of demand at 15
+    minutes to 10.5% at four hours.
+  </p>
+
+  <div class="validation" id="backtest-detail"></div>
+
   <h2>Validation</h2>
 
   <p class="caption" style="max-width:46rem">
-    Published because a dashboard that reports a reduction without reporting its own error bars is not
-    telling you enough to judge it.
+    Chronological hold-out metrics for the models that produce the live schedule. The backtest above is
+    the test of the whole stack.
   </p>
 
   <div class="validation" id="validation"></div>
 
   <div class="chart-wrap scatter" id="scatter-chart"></div>
   <p class="caption">
-    Fig 4: Relationship between large-plant production, renewable energy, net cross-border exchange and
-    CO<sub>2</sub> intensity over the past 24 hours. The strong apparent link between thermal output and low
-    emissions visible in data like this is confounded by wind, and is exactly what the constrained model is
-    built to ignore.
+    Fig 7: Relationship between large-plant production, renewable energy, net cross-border exchange and
+    CO<sub>2</sub> intensity over the past 24 hours. The apparent link between thermal output and low
+    emissions is confounded by wind, which is why the emissions model is constrained monotone in every
+    supply source and predicts total emissions rather than intensity.
   </p>
 
   <div class="footer">

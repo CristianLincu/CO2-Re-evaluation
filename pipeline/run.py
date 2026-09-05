@@ -42,6 +42,7 @@ def run_pipeline():
             lower=lower,
             upper=upper,
             ramp=ramp,
+            floor=co2_model.emission_floor(demand, renewables),
         )
 
         print("Evaluating hold-current counterfactual...")

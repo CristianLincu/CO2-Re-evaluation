@@ -104,8 +104,25 @@ TECHNICAL_LIMITS = {
 XI_BALANCE = 1.0e4  # grid imbalance penalty
 XI_RAMP = 1.0e4  # ramp violation penalty
 XI_SUPPORT = 1.0e4  # out-of-distribution penalty
+XI_FLOOR = 5.0e3  # proposals cleaner than anything ever metered
 ZETA_CO2 = 1.0e2  # emissions weight
 GAMMA_UNCERTAINTY = 5.0e1  # model-uncertainty penalty
+
+# --- Outcome-space plausibility floor ----------------------------------------
+# The Mahalanobis guard polices where a *point* sits in feature space. Backtest
+# showed it is nearly inert against this optimiser: proposed operating points
+# had slightly lower novelty than the ones the grid actually visited, while
+# 60% of them implied an emission rate below anything ever metered under
+# comparable demand and wind, and 17% were below zero outright.
+#
+# Monotonicity constrains the shape of the response, not its range, so the
+# search can walk off the bottom of the surface while every coordinate still
+# looks ordinary. This floor closes that route directly: for the conditions of
+# each step, find comparable hours in the record and refuse to believe any
+# outcome cleaner than the best of them.
+FLOOR_QUANTILE = 0.05
+FLOOR_TOLERANCES = (200.0, 400.0, 800.0)  # MW, widened until enough matches
+FLOOR_MIN_NEIGHBOURS = 25
 
 BALANCE_TOLERANCE = 0.01  # fraction of forecast demand
 

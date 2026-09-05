@@ -235,5 +235,10 @@
     "min_at_mw": 300.0
   },
   "novelty_threshold": 25.42015722511958,
-  "test_in_distribution_pct": 98.91618497109826
+  "test_in_distribution_pct": 98.91618497109826,
+  "raw_negative_on_training_pct": 0.2976878612716763,
+  "softplus_shift_above_20tph": 2.0474821837979107e-09,
+  "rmse_before_transform": 35.83041596276672,
+  "rmse_after_transform": 35.76502884865206,
+  "floor_admits_observed_pct": 96.48843930635839
 }

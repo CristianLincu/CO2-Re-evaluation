@@ -1,0 +1,29 @@
+{
+  "co2": {
+    "subsample": 0.7,
+    "reg_lambda": 20.0,
+    "n_estimators": 600,
+    "min_child_weight": 5,
+    "max_depth": 6,
+    "learning_rate": 0.08,
+    "colsample_bytree": 0.85
+  },
+  "demand": {
+    "subsample": 0.85,
+    "reg_lambda": 5.0,
+    "n_estimators": 200,
+    "min_child_weight": 20,
+    "max_depth": 3,
+    "learning_rate": 0.05,
+    "colsample_bytree": 0.7
+  },
+  "renewables": {
+    "subsample": 0.7,
+    "reg_lambda": 1.0,
+    "n_estimators": 200,
+    "min_child_weight": 5,
+    "max_depth": 3,
+    "learning_rate": 0.1,
+    "colsample_bytree": 1.0
+  }
+}

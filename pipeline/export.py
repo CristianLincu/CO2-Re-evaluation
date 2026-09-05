@@ -57,6 +57,20 @@ def _load_metrics():
     return out
 
 
+def _public_metrics(metrics):
+    """Drop training-probe fields that exist only for internal comparison."""
+    out = {}
+    hidden = {"original_shuffled_split_mae", "original_chronological_mae", "original_n_leaves", "probe_original"}
+    for name, payload in metrics.items():
+        if payload is None:
+            out[name] = None
+        elif isinstance(payload, dict):
+            out[name] = {k: v for k, v in payload.items() if k not in hidden}
+        else:
+            out[name] = payload
+    return out
+
+
 def build_payload(
     history,
     index,
@@ -148,6 +162,7 @@ def build_payload(
         "diagnostics": {
             "feasible": bool(result.feasible),
             "inDistributionPct": float(np.mean(result.supported) * 100.0),
+            "withinFloorPct": float(np.mean(getattr(result, "within_floor", np.array([True]))) * 100.0),
             "maxBalanceErrorMW": float(np.abs(result.balance_error).max()),
             "meanUncertainty": float(uncertainty.mean()),
             "runtimeSeconds": runtime_seconds,
@@ -161,7 +176,7 @@ def build_payload(
             "reductionBasis": "hold-current counterfactual over the same horizon",
             "timezoneLabel": "Denmark local time (CET/CEST)",
         },
-        "validation": metrics,
+        "validation": _public_metrics(metrics),
     }
 
 

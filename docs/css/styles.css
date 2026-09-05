@@ -373,6 +373,25 @@ tbody td:first-child {
   background: #3a4560;
 }
 
+.static-fig {
+  margin: 1.25rem auto;
+  max-width: 900px;
+  background: #f4f1ea;
+  border-radius: 8px;
+  border: 1px solid #555;
+  padding: 0.6rem;
+}
+
+.static-fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+a {
+  color: var(--link);
+}
+
 .methodology ul {
   padding-left: 1.25rem;
 }

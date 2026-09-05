@@ -120,7 +120,9 @@ def fig_convergence_and_dispatch():
     demand, renewables, current, index, _ = build_forecasts(
         history, forecast_frame, demand_model, renewables_model
     )
-    spec = ProblemSpec(demand, renewables, current, lower, upper, ramp)
+    spec = ProblemSpec(
+        demand, renewables, current, lower, upper, ramp, floor=co2_model.emission_floor(demand, renewables)
+    )
 
     _, baseline_diag = hold_current_baseline(spec, co2_model)
     baseline = baseline_diag["intensity"][0]

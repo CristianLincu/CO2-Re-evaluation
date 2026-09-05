@@ -43,6 +43,7 @@ from pipeline.config import (
     GA_POPULATION,
     GAMMA_UNCERTAINTY,
     XI_BALANCE,
+    XI_FLOOR,
     XI_RAMP,
     XI_SUPPORT,
     ZETA_CO2,
@@ -61,6 +62,9 @@ class ProblemSpec:
     lower: np.ndarray  # (G,)
     upper: np.ndarray  # (G,)
     ramp: np.ndarray  # (G,) max change per step, MW
+    # Cleanest emission rate on record for each step's conditions. Fixed for a
+    # solve, so it is computed once by the caller from the CO2 model.
+    floor: np.ndarray | None = None  # (T,) t/h
     horizon: int = field(init=False)
 
     def __post_init__(self):
@@ -82,6 +86,7 @@ class OptimizationResult:
     balance_error: np.ndarray  # (T,) MW
     feasible: bool
     supported: np.ndarray  # (T,) bool
+    within_floor: np.ndarray  # (T,) bool: outcome has historical precedent
     fitness: float
     history: np.ndarray
 
@@ -186,10 +191,26 @@ def evaluate(pop: np.ndarray, spec: ProblemSpec, model):
     novel = np.maximum(novelty / model.novelty_threshold - 1.0, 0.0)
     support_penalty = unsupported + novel
 
+    # Stay where the *outcome* has precedent. The novelty term above asks
+    # whether these coordinates look familiar; this asks whether anyone has
+    # ever run this clean on a day like today. Backtest showed the first
+    # question is far too easy to pass while failing the second.
+    if spec.floor is None:
+        floor_penalty = np.zeros_like(intensity)
+    else:
+        floor = spec.floor[None, :]
+        deficit = np.maximum(floor - total, 0.0)
+        floor_penalty = np.where(
+            np.isfinite(floor) & (deficit > 0),
+            1.0 + deficit / np.maximum(np.abs(floor), 1.0),
+            0.0,
+        )
+
     fitness = (
         XI_BALANCE * balance_penalty.mean(axis=1)
         + XI_RAMP * ramp_penalty.mean(axis=1)
         + XI_SUPPORT * support_penalty.mean(axis=1)
+        + XI_FLOOR * floor_penalty.mean(axis=1)
         + ZETA_CO2 * intensity.mean(axis=1)
         + GAMMA_UNCERTAINTY * dispersion_intensity.mean(axis=1)
     )
@@ -201,6 +222,7 @@ def evaluate(pop: np.ndarray, spec: ProblemSpec, model):
         "balance_error": balance_error,
         "balance_penalty": balance_penalty,
         "ramp_penalty": ramp_penalty,
+        "floor_penalty": floor_penalty,
         "support": support,
         "novelty": novelty,
         "supported": (support >= model.min_leaf_support)
@@ -345,6 +367,7 @@ def optimize(
             and (diagnostics["ramp_penalty"][0] == 0).all()
         ),
         supported=diagnostics["supported"][0],
+        within_floor=diagnostics["floor_penalty"][0] == 0,
         fitness=float(final_fitness[0]),
         history=history,
     )
